@@ -3,6 +3,7 @@ import TelegramBot from "node-telegram-bot-api";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI, { toFile } from "openai";
 import path from "path";
+import { execSync } from "child_process";
 
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
@@ -12,6 +13,36 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
     params: { timeout: 10 }
   }
 });
+bot.onText(/\/status/, async (msg) => {
+  const chatId = msg.chat.id;
+  try {
+    const pm2 = execSync("pm2 status telegram-bot --no-color", { encoding: "utf8" });
+    let git = "";
+    try {
+      git = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+    } catch (e) {
+      git = "unknown";
+    }
+
+    let lastUpdate = "";
+    try {
+      lastUpdate = execSync("tail -n 5 ./auto-update.log", { encoding: "utf8" }).trim();
+    } catch (e) {
+      lastUpdate = "(no auto-update.log yet)";
+    }
+
+    const text =
+      `🟢 Server status OK\n` +
+      `• git: ${git}\n\n` +
+      `• pm2:\n${pm2}\n` +
+      `• last update log:\n${lastUpdate}`;
+
+    await bot.sendMessage(chatId, text);
+  } catch (e) {
+    await bot.sendMessage(chatId, `🔴 status failed: ${e.message || e}`);
+  }
+});
+
 
 bot.on("polling_error", (error) => {
   const msg = String(error?.message || error);
