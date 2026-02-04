@@ -38,8 +38,12 @@ bot.onText(/\/status/, async (msg) => {
       `• last update log:\n${lastUpdate}`;
 
     await bot.sendMessage(chatId, text);
+return;
+
   } catch (e) {
     await bot.sendMessage(chatId, `🔴 status failed: ${e.message || e}`);
+return;
+
   }
 });
 
@@ -85,8 +89,11 @@ function loadPersona() {
 }
 
 bot.on("message", async (msg) => {
+const text = (msg.text || "").trim();
   const chatId = msg.chat.id;
-  const text = msg.text;
+
+  if (!text) return;
+  if (text.startsWith("/")) return;
 
   // 📷 用户发来图片：下载到本地，等待后续 \edit 指令
   if (msg.photo && msg.photo.length > 0) {
