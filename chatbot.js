@@ -240,3 +240,4 @@ if (text.startsWith("/img ")) {
     await bot.sendMessage(chatId, "⚠️ 出错了");
   }
 });
+// test
