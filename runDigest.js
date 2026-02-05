@@ -1,6 +1,9 @@
 import { fetchNews } from "./fetchNews.js";
 import { summarizeNews } from "./summarize.js";
 import { sendTelegramMessage } from "./telegram.js";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 async function main() {
   const news = await fetchNews({ hours: 24, limit: 6 });
