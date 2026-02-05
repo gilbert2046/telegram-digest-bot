@@ -29,6 +29,8 @@ const ADMIN_CHAT_IDS = (process.env.ADMIN_CHAT_IDS || process.env.TELEGRAM_CHAT_
   .filter(Boolean);
 const UPDATE_COOLDOWN_MS = 60 * 1000;
 const UPDATE_MAX_AGE_MS = 15 * 1000;
+const BOT_START_TS = Date.now();
+const UPDATE_LOCK_FILE = path.join(process.cwd(), ".update.lock");
 let updateInProgress = false;
 let lastUpdateAt = 0;
 const lastUpdateMsgId = new Map(); // chatId -> last message_id
@@ -101,6 +103,9 @@ bot.onText(/\/update/, async (msg) => {
   if (msgTs && (now - msgTs) > UPDATE_MAX_AGE_MS) {
     return;
   }
+  if (msgTs && msgTs < (BOT_START_TS - 5000)) {
+    return;
+  }
   const lastId = lastUpdateMsgId.get(chatId) || 0;
   if (msg.message_id && msg.message_id <= lastId) {
     return;
@@ -117,8 +122,21 @@ bot.onText(/\/update/, async (msg) => {
     return;
   }
 
+  // File lock to survive restarts
+  try {
+    if (fs.existsSync(UPDATE_LOCK_FILE)) {
+      const stat = fs.statSync(UPDATE_LOCK_FILE);
+      if ((Date.now() - stat.mtimeMs) < 2 * 60 * 1000) {
+        await bot.sendMessage(chatId, "⏳ 正在执行或冷却中，请稍后再试。");
+        return;
+      }
+      fs.unlinkSync(UPDATE_LOCK_FILE);
+    }
+  } catch {}
+
   await bot.sendMessage(chatId, "🔄 Running auto-update now...");
   try {
+    fs.writeFileSync(UPDATE_LOCK_FILE, JSON.stringify({ ts: Date.now(), pid: process.pid }));
     updateInProgress = true;
     lastUpdateAt = now;
     execSync("bash scripts/auto_update.sh", { encoding: "utf8" });
@@ -134,6 +152,7 @@ bot.onText(/\/update/, async (msg) => {
     await bot.sendMessage(chatId, `⚠️ Update failed: ${msgText}`);
   } finally {
     updateInProgress = false;
+    try { fs.unlinkSync(UPDATE_LOCK_FILE); } catch {}
   }
 });
 
