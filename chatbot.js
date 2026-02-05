@@ -120,6 +120,7 @@ bot.on("polling_error", (error) => {
 });
 
 const lastPhotoByChat = new Map(); // chatId -> { filePath, ts }
+const pendingImageChoice = new Map(); // chatId -> { prompt }
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null;
@@ -652,6 +653,12 @@ bot.onText(/\/img (.+)/, async (msg, match) => {
     return;
   }
 
+  if (provider === "ask") {
+    pendingImageChoice.set(chatId, { prompt });
+    await bot.sendMessage(chatId, "请选择生成引擎：回复 `openai` 或 `gemini`");
+    return;
+  }
+
   await bot.sendMessage(chatId, `🎨 正在生成图片…（${provider}）`);
 
   try {
@@ -662,6 +669,27 @@ bot.onText(/\/img (.+)/, async (msg, match) => {
       img = await generateImageWithOpenAI(prompt);
     }
 
+    await bot.sendPhoto(chatId, img.buffer, { caption: `🖼️ ${prompt}` });
+  } catch (e) {
+    console.error("Image error:", e);
+    await bot.sendMessage(chatId, `⚠️ 图片生成出错：${e.message || e}`);
+  }
+});
+
+bot.onText(/^(openai|gemini)$/i, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const choice = (match?.[1] || "").toLowerCase();
+  const pending = pendingImageChoice.get(chatId);
+  if (!pending) return;
+
+  pendingImageChoice.delete(chatId);
+  const prompt = pending.prompt;
+  await bot.sendMessage(chatId, `🎨 正在生成图片…（${choice}）`);
+
+  try {
+    const img = choice === "gemini"
+      ? await generateImageWithGemini(prompt)
+      : await generateImageWithOpenAI(prompt);
     await bot.sendPhoto(chatId, img.buffer, { caption: `🖼️ ${prompt}` });
   } catch (e) {
     console.error("Image error:", e);
