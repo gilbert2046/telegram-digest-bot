@@ -16,6 +16,10 @@ const MAX_MEMORY = Number(process.env.MAX_MEMORY || 12);
 const OPENAI_CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-haiku-20240307";
 const PREFERRED_PROVIDER = (process.env.PREFERRED_PROVIDER || "").toLowerCase();
+const ADMIN_CHAT_IDS = (process.env.ADMIN_CHAT_IDS || process.env.TELEGRAM_CHAT_ID || "")
+  .split(",")
+  .map(x => x.trim())
+  .filter(Boolean);
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
   polling: {
@@ -70,6 +74,31 @@ bot.onText(/\/status/, async (msg) => {
   } catch (e) {
     await bot.sendMessage(chatId, `🔴 status failed: ${e.message || e}`);
     return;
+  }
+});
+
+bot.onText(/\/update/, async (msg) => {
+  const chatId = msg.chat.id;
+  const chatKey = String(chatId);
+
+  if (!ADMIN_CHAT_IDS.includes(chatKey)) {
+    await bot.sendMessage(chatId, "⛔️ You are not authorized to run updates.");
+    return;
+  }
+
+  await bot.sendMessage(chatId, "🔄 Running auto-update now...");
+  try {
+    execSync("bash scripts/auto_update.sh", { encoding: "utf8" });
+    let tail = "";
+    try {
+      tail = execSync("tail -n 20 ./auto-update.log", { encoding: "utf8" }).trim();
+    } catch (e) {
+      tail = "(no auto-update.log yet)";
+    }
+    await bot.sendMessage(chatId, `✅ Update done.\\n\\n${tail}`);
+  } catch (e) {
+    const msgText = e?.message || e;
+    await bot.sendMessage(chatId, `⚠️ Update failed: ${msgText}`);
   }
 });
 
