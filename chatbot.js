@@ -28,8 +28,10 @@ const ADMIN_CHAT_IDS = (process.env.ADMIN_CHAT_IDS || process.env.TELEGRAM_CHAT_
   .map(x => x.trim())
   .filter(Boolean);
 const UPDATE_COOLDOWN_MS = 60 * 1000;
+const UPDATE_MAX_AGE_MS = 15 * 1000;
 let updateInProgress = false;
 let lastUpdateAt = 0;
+const lastUpdateMsgId = new Map(); // chatId -> last message_id
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
   polling: {
@@ -92,13 +94,24 @@ bot.onText(/\/status/, async (msg) => {
 bot.onText(/\/update/, async (msg) => {
   const chatId = msg.chat.id;
   const chatKey = String(chatId);
+  const now = Date.now();
+  const msgTs = (msg.date || 0) * 1000;
+
+  // Ignore backlog / duplicated updates
+  if (msgTs && (now - msgTs) > UPDATE_MAX_AGE_MS) {
+    return;
+  }
+  const lastId = lastUpdateMsgId.get(chatId) || 0;
+  if (msg.message_id && msg.message_id <= lastId) {
+    return;
+  }
+  if (msg.message_id) lastUpdateMsgId.set(chatId, msg.message_id);
 
   if (!ADMIN_CHAT_IDS.includes(chatKey)) {
     await bot.sendMessage(chatId, "⛔️ You are not authorized to run updates.");
     return;
   }
 
-  const now = Date.now();
   if (updateInProgress || (now - lastUpdateAt) < UPDATE_COOLDOWN_MS) {
     await bot.sendMessage(chatId, "⏳ 正在执行或冷却中，请稍后再试。");
     return;
