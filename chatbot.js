@@ -13,6 +13,9 @@ const PERSONA_FILE = "persona.txt";
 const TMP_DIR = path.join(process.cwd(), "tmp");
 
 const MAX_MEMORY = Number(process.env.MAX_MEMORY || 12);
+const MAX_LONG_MEMORY = Number(process.env.MAX_LONG_MEMORY || 100);
+const AUTO_MEMORY = (process.env.AUTO_MEMORY || "on").toLowerCase() !== "off";
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY || "";
 const OPENAI_CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-haiku-20240307";
 const PREFERRED_PROVIDER = (process.env.PREFERRED_PROVIDER || "").toLowerCase();
@@ -148,8 +151,9 @@ function saveStore(store) {
 function getChatState(store, chatId) {
   const key = String(chatId);
   if (!store.chats[key]) {
-    store.chats[key] = { messages: [], tasks: [] };
+    store.chats[key] = { messages: [], tasks: [], memories: [] };
   }
+  if (!store.chats[key].memories) store.chats[key].memories = [];
   return store.chats[key];
 }
 
@@ -171,6 +175,54 @@ function loadPersona() {
     "- Provide weather/time using the built-in commands when asked.",
     "- Never invent sources; if missing info, say so.",
   ].join("\n");
+}
+
+function sanitizeMemory(text) {
+  const t = (text || "").trim();
+  if (!t) return null;
+  const lower = t.toLowerCase();
+  const blocked = [
+    "password",
+    "passcode",
+    "token",
+    "api key",
+    "apikey",
+    "secret",
+    "credit card",
+    "银行卡",
+    "密码",
+    "验证码",
+    "token",
+    "密钥"
+  ];
+  if (blocked.some(b => lower.includes(b))) return null;
+  return t;
+}
+
+async function extractMemories(text) {
+  const system = [
+    "You extract user memory facts for a personal assistant.",
+    "Return a JSON array of short memory strings.",
+    "Only include stable personal preferences or background facts.",
+    "Do NOT include secrets, credentials, or sensitive financial data.",
+    "If nothing to store, return an empty array [] only."
+  ].join("\n");
+
+  const prompt = `Text:\n${text}\n\nJSON array only:`;
+  const reply = await callLLM({
+    system,
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.1,
+    maxTokens: 200
+  });
+
+  try {
+    const arr = JSON.parse(reply);
+    if (!Array.isArray(arr)) return [];
+    return arr.map(x => sanitizeMemory(String(x))).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 function pickProvider() {
@@ -262,9 +314,11 @@ function formatHelp() {
     "🧭 Commands:",
     "/help - show this help",
     "/status - server status",
+    "/search <query> - web search (Tavily)",
     "/news - latest AI/tech news list",
     "/digest - summarized digest from RSS",
     "/summary <url> - summarize a webpage",
+    "/browse <url> - same as /summary",
     "/translate <text> - translate (auto detect)",
     "/write <instruction> - writing helper",
     "/todo add <item> | /todo list | /todo done <n> | /todo clear",
@@ -274,7 +328,11 @@ function formatHelp() {
     "/edit <prompt> - edit last image (send image first)",
     "/persona <text> - set persona",
     "/remember <text> - add long-term memory",
-    "/forget - clear memory"
+    "/forget - clear memory",
+    "/mem - list memories",
+    "/mem add <text> - add memory",
+    "/mem del <n> - delete memory",
+    "/mem clear - clear memories"
   ].join("\n");
 }
 
@@ -379,6 +437,33 @@ function formatNewsList(items) {
   return items.map((x, i) => `${i + 1}. ${x.title}\n${x.link}`).join("\n\n");
 }
 
+async function tavilySearch(query) {
+  if (!TAVILY_API_KEY) {
+    throw new Error("Missing TAVILY_API_KEY");
+  }
+
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${TAVILY_API_KEY}`
+    },
+    body: JSON.stringify({
+      query,
+      search_depth: "basic",
+      max_results: 8,
+      include_answer: true,
+      include_raw_content: false
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Tavily error: ${err}`);
+  }
+  return await res.json();
+}
+
 function ensureTmpDir() {
   if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR);
 }
@@ -465,6 +550,10 @@ bot.onText(/\/start/, async (msg) => {
   await bot.sendMessage(msg.chat.id, formatHelp());
 });
 
+bot.onText(/\/chatid/, async (msg) => {
+  await bot.sendMessage(msg.chat.id, `chat_id: ${msg.chat.id}`);
+});
+
 bot.onText(/\/persona (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const newPersona = (match?.[1] || "").trim();
@@ -497,6 +586,7 @@ bot.onText(/\/forget/, async (msg) => {
   const state = getChatState(store, chatId);
   state.messages = [];
   state.tasks = [];
+  state.memories = [];
   saveStore(store);
   await bot.sendMessage(chatId, "🧹 记忆已清空");
 });
@@ -582,6 +672,40 @@ bot.onText(/\/summary (.+)/, async (msg, match) => {
     await summarizeUrl(url, chatId);
   } catch (e) {
     await bot.sendMessage(chatId, `⚠️ 总结失败：${e.message || e}`);
+  }
+});
+
+bot.onText(/\/browse (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const url = (match?.[1] || "").trim();
+  if (!url.startsWith("http")) {
+    await bot.sendMessage(chatId, "用法：/browse https://example.com");
+    return;
+  }
+  try {
+    await summarizeUrl(url, chatId);
+  } catch (e) {
+    await bot.sendMessage(chatId, `⚠️ 总结失败：${e.message || e}`);
+  }
+});
+
+bot.onText(/\/search (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const query = (match?.[1] || "").trim();
+  if (!query) {
+    await bot.sendMessage(chatId, "用法：/search 你的问题");
+    return;
+  }
+  try {
+    const data = await tavilySearch(query);
+    const answer = data.answer ? `🧠 Summary:\n${data.answer}\n\n` : "";
+    const results = (data.results || [])
+      .slice(0, 8)
+      .map((r, i) => `${i + 1}. ${r.title || r.url}\n${r.url}`)
+      .join("\n\n");
+    await bot.sendMessage(chatId, `${answer}🔎 Results:\n${results || "No results."}`);
+  } catch (e) {
+    await bot.sendMessage(chatId, `⚠️ 搜索失败：${e.message || e}`);
   }
 });
 
@@ -678,6 +802,56 @@ bot.onText(/\/todo (.+)/, async (msg, match) => {
   await bot.sendMessage(chatId, "用法：/todo add ... | /todo list | /todo done n | /todo clear");
 });
 
+bot.onText(/\/mem$/, async (msg) => {
+  const chatId = msg.chat.id;
+  const store = loadStore();
+  const state = getChatState(store, chatId);
+  if (!state.memories.length) {
+    await bot.sendMessage(chatId, "暂无记忆。");
+    return;
+  }
+  const lines = state.memories.map((m, i) => `${i + 1}. ${m}`);
+  await bot.sendMessage(chatId, lines.join("\n"));
+});
+
+bot.onText(/\/mem add (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const store = loadStore();
+  const state = getChatState(store, chatId);
+  const text = sanitizeMemory(match?.[1] || "");
+  if (!text) {
+    await bot.sendMessage(chatId, "用法：/mem add 你要记住的内容");
+    return;
+  }
+  state.memories.push(text);
+  state.memories = state.memories.slice(-MAX_LONG_MEMORY);
+  saveStore(store);
+  await bot.sendMessage(chatId, "✅ 已加入记忆");
+});
+
+bot.onText(/\/mem del (\\d+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const store = loadStore();
+  const state = getChatState(store, chatId);
+  const idx = Number(match?.[1]) - 1;
+  if (Number.isNaN(idx) || idx < 0 || idx >= state.memories.length) {
+    await bot.sendMessage(chatId, "用法：/mem del 1");
+    return;
+  }
+  state.memories.splice(idx, 1);
+  saveStore(store);
+  await bot.sendMessage(chatId, "✅ 已删除");
+});
+
+bot.onText(/\/mem clear/, async (msg) => {
+  const chatId = msg.chat.id;
+  const store = loadStore();
+  const state = getChatState(store, chatId);
+  state.memories = [];
+  saveStore(store);
+  await bot.sendMessage(chatId, "🧹 已清空记忆");
+});
+
 bot.onText(/\/time (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const place = (match?.[1] || "").trim();
@@ -744,10 +918,9 @@ bot.on("text", async (msg) => {
   state.messages = state.messages.slice(-MAX_MEMORY);
   saveStore(store);
 
-  const memoryNotes = state.messages
-    .filter(m => m.role === "system")
-    .map(m => `- ${m.content}`)
-    .join("\n");
+  const memoryNotes = state.memories.length
+    ? state.memories.map(m => `- ${m}`).join("\n")
+    : "";
 
   const system = memoryNotes
     ? `${persona}\n\nLong-term memory:\n${memoryNotes}`
@@ -773,5 +946,24 @@ bot.on("text", async (msg) => {
   } catch (e) {
     console.error(e);
     await bot.sendMessage(chatId, "⚠️ 出错了");
+  }
+
+  // Auto memory extraction (low cost)
+  if (AUTO_MEMORY) {
+    try {
+      const newMem = await extractMemories(text);
+      if (newMem.length) {
+        const store2 = loadStore();
+        const state2 = getChatState(store2, chatId);
+        const existing = new Set(state2.memories);
+        for (const m of newMem) {
+          if (!existing.has(m)) state2.memories.push(m);
+        }
+        state2.memories = state2.memories.slice(-MAX_LONG_MEMORY);
+        saveStore(store2);
+      }
+    } catch (e) {
+      // silent
+    }
   }
 });
