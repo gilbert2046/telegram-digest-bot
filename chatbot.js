@@ -156,6 +156,22 @@ bot.onText(/\/update/, async (msg) => {
   }
 });
 
+bot.onText(/\/update status|\/update log/, async (msg) => {
+  const chatId = msg.chat.id;
+  const chatKey = String(chatId);
+  if (!ADMIN_CHAT_IDS.includes(chatKey)) {
+    await bot.sendMessage(chatId, "⛔️ You are not authorized to view update logs.");
+    return;
+  }
+  let tail = "";
+  try {
+    tail = execSync("tail -n 30 ./auto-update.log", { encoding: "utf8" }).trim();
+  } catch (e) {
+    tail = "(no auto-update.log yet)";
+  }
+  await bot.sendMessage(chatId, `🧾 Update log (last 30 lines):\n${tail}`);
+});
+
 bot.on("polling_error", (error) => {
   const msg = String(error?.message || error);
   if (msg.includes("ENOTFOUND") || msg.includes("EAI_AGAIN")) {
