@@ -3,6 +3,7 @@ import path from "path";
 import TelegramBot from "node-telegram-bot-api";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI, { toFile } from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { execSync } from "child_process";
 import dotenv from "dotenv";
 
@@ -16,6 +17,9 @@ const MAX_MEMORY = Number(process.env.MAX_MEMORY || 12);
 const MAX_LONG_MEMORY = Number(process.env.MAX_LONG_MEMORY || 100);
 const AUTO_MEMORY = (process.env.AUTO_MEMORY || "on").toLowerCase() !== "off";
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || "";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
+const IMG_PROVIDER = (process.env.IMG_PROVIDER || "openai").toLowerCase();
 const OPENAI_CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-haiku-20240307";
 const PREFERRED_PROVIDER = (process.env.PREFERRED_PROVIDER || "").toLowerCase();
@@ -61,7 +65,9 @@ bot.onText(/\/status/, async (msg) => {
       `TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? "OK" : "MISSING"}`,
       `TELEGRAM_CHAT_ID: ${process.env.TELEGRAM_CHAT_ID ? "OK" : "MISSING"}`,
       `ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? "OK" : "MISSING"}`,
-      `OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? "OK" : "MISSING"}`
+      `OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? "OK" : "MISSING"}`,
+      `GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? "OK" : "MISSING"}`,
+      `GOOGLE_API_KEY: ${process.env.GOOGLE_API_KEY ? "OK" : "MISSING"}`
     ].join("\n");
 
     const text =
@@ -119,6 +125,9 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   : null;
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
+const googleAI = GEMINI_API_KEY
+  ? new GoogleGenAI({ apiKey: GEMINI_API_KEY })
   : null;
 
 console.log("🤖 Telegram agent is running...");
@@ -324,7 +333,9 @@ function formatHelp() {
     "/todo add <item> | /todo list | /todo done <n> | /todo clear",
     "/time <city> - local time for a city",
     "/weather <city> - current weather",
-    "/img <prompt> - generate image",
+    "/img <prompt> - generate image (default provider)",
+    "/img openai: <prompt> - force OpenAI",
+    "/img gemini: <prompt> - force Gemini",
     "/edit <prompt> - edit last image (send image first)",
     "/persona <text> - set persona",
     "/remember <text> - add long-term memory",
@@ -518,6 +529,46 @@ async function handleImageEdit(chatId, prompt) {
   }
 }
 
+function pickImageProvider(prompt) {
+  const trimmed = prompt.trim();
+  if (trimmed.toLowerCase().startsWith("openai:")) {
+    return { provider: "openai", prompt: trimmed.slice(7).trim() };
+  }
+  if (trimmed.toLowerCase().startsWith("gemini:")) {
+    return { provider: "gemini", prompt: trimmed.slice(7).trim() };
+  }
+  return { provider: IMG_PROVIDER, prompt: trimmed };
+}
+
+async function generateImageWithGemini(prompt) {
+  if (!googleAI) throw new Error("Missing GEMINI_API_KEY");
+  const response = await googleAI.models.generateContent({
+    model: GEMINI_IMAGE_MODEL,
+    contents: [{ text: prompt }]
+  });
+
+  const parts = response.parts || response?.candidates?.[0]?.content?.parts || [];
+  const inline = parts.find(p => p.inlineData && p.inlineData.data);
+  if (!inline) throw new Error("No image data returned by Gemini");
+
+  const buffer = Buffer.from(inline.inlineData.data, "base64");
+  return { buffer, mimeType: inline.inlineData.mimeType || "image/png" };
+}
+
+async function generateImageWithOpenAI(prompt) {
+  if (!openai) throw new Error("Missing OPENAI_API_KEY");
+  const result = await openai.images.generate({
+    model: "gpt-image-1",
+    prompt,
+    size: "1024x1024"
+  });
+
+  const imageBase64 = result.data?.[0]?.b64_json;
+  if (!imageBase64) throw new Error("No image data returned by OpenAI");
+  const buffer = Buffer.from(imageBase64, "base64");
+  return { buffer, mimeType: "image/png" };
+}
+
 bot.on("photo", async (msg) => {
   const chatId = msg.chat.id;
   if (!msg.photo || msg.photo.length === 0) return;
@@ -593,35 +644,25 @@ bot.onText(/\/forget/, async (msg) => {
 
 bot.onText(/\/img (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
-  const prompt = (match?.[1] || "").trim();
-
-  if (!openai) {
-    await bot.sendMessage(chatId, "⚠️ 缺少 OPENAI_API_KEY，无法生成图片。");
-    return;
-  }
+  const raw = (match?.[1] || "").trim();
+  const { provider, prompt } = pickImageProvider(raw);
 
   if (!prompt) {
     await bot.sendMessage(chatId, "用法：/img 一只穿西装的猫在巴黎街头");
     return;
   }
 
-  await bot.sendMessage(chatId, "🎨 正在生成图片…");
+  await bot.sendMessage(chatId, `🎨 正在生成图片…（${provider}）`);
 
   try {
-    const result = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt,
-      size: "1024x1024"
-    });
-
-    const imageBase64 = result.data?.[0]?.b64_json;
-    if (!imageBase64) {
-      await bot.sendMessage(chatId, "⚠️ 图片生成失败：没有返回图像数据。");
-      return;
+    let img;
+    if (provider === "gemini") {
+      img = await generateImageWithGemini(prompt);
+    } else {
+      img = await generateImageWithOpenAI(prompt);
     }
 
-    const buffer = Buffer.from(imageBase64, "base64");
-    await bot.sendPhoto(chatId, buffer, { caption: `🖼️ ${prompt}` });
+    await bot.sendPhoto(chatId, img.buffer, { caption: `🖼️ ${prompt}` });
   } catch (e) {
     console.error("Image error:", e);
     await bot.sendMessage(chatId, `⚠️ 图片生成出错：${e.message || e}`);
