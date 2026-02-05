@@ -27,6 +27,9 @@ const ADMIN_CHAT_IDS = (process.env.ADMIN_CHAT_IDS || process.env.TELEGRAM_CHAT_
   .split(",")
   .map(x => x.trim())
   .filter(Boolean);
+const UPDATE_COOLDOWN_MS = 60 * 1000;
+let updateInProgress = false;
+let lastUpdateAt = 0;
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
   polling: {
@@ -95,8 +98,16 @@ bot.onText(/\/update/, async (msg) => {
     return;
   }
 
+  const now = Date.now();
+  if (updateInProgress || (now - lastUpdateAt) < UPDATE_COOLDOWN_MS) {
+    await bot.sendMessage(chatId, "⏳ 正在执行或冷却中，请稍后再试。");
+    return;
+  }
+
   await bot.sendMessage(chatId, "🔄 Running auto-update now...");
   try {
+    updateInProgress = true;
+    lastUpdateAt = now;
     execSync("bash scripts/auto_update.sh", { encoding: "utf8" });
     let tail = "";
     try {
@@ -108,6 +119,8 @@ bot.onText(/\/update/, async (msg) => {
   } catch (e) {
     const msgText = e?.message || e;
     await bot.sendMessage(chatId, `⚠️ Update failed: ${msgText}`);
+  } finally {
+    updateInProgress = false;
   }
 });
 
