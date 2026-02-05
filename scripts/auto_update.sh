@@ -4,6 +4,13 @@ set -euo pipefail
 BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_FILE="$BASE_DIR/auto-update.log"
 
+# Ensure Node/npm are available in non-interactive shells (PM2 cron)
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1090
+  . "$HOME/.nvm/nvm.sh"
+fi
+
 echo "=== Auto update: $(date) ===" | tee -a "$LOG_FILE"
 
 cd "$BASE_DIR"
