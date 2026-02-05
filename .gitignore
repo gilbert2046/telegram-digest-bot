@@ -3,3 +3,5 @@ digest.log
 auto-update.log
 memory.json
 tmp/
+node_modules/
+.env
