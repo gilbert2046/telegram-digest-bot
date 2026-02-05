@@ -33,11 +33,27 @@ bot.onText(/\/status/, async (msg) => {
       lastUpdate = "(no auto-update.log yet)";
     }
 
+    let lastDigest = "";
+    try {
+      lastDigest = execSync("tail -n 5 ./digest.log", { encoding: "utf8" }).trim();
+    } catch (e) {
+      lastDigest = "(no digest.log yet)";
+    }
+
+    const envStatus = [
+      `TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? "OK" : "MISSING"}`,
+      `TELEGRAM_CHAT_ID: ${process.env.TELEGRAM_CHAT_ID ? "OK" : "MISSING"}`,
+      `ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? "OK" : "MISSING"}`,
+      `OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? "OK" : "MISSING"}`
+    ].join("\n");
+
     const text =
       `🟢 Server status OK\n` +
       `• git: ${git}\n\n` +
       `• pm2:\n${pm2}\n` +
-      `• last update log:\n${lastUpdate}`;
+      `• last update log:\n${lastUpdate}\n\n` +
+      `• last digest log:\n${lastDigest}\n\n` +
+      `• env:\n${envStatus}`;
 
     await bot.sendMessage(chatId, text);
 return;

@@ -2,6 +2,7 @@ import { fetchNews } from "./fetchNews.js";
 import { summarizeNews } from "./summarize.js";
 import { sendTelegramMessage } from "./telegram.js";
 import dotenv from "dotenv";
+import fs from "fs";
 
 dotenv.config();
 
@@ -26,9 +27,14 @@ async function main() {
   console.log("Sending to Telegram...");
   await sendTelegramMessage(digest);
   console.log("Done.");
+
+  const line = `${new Date().toISOString()} OK items=${news.length}\n`;
+  fs.appendFileSync("digest.log", line);
 }
 
 main().catch((e) => {
   console.error("ERROR:", e.message);
+  const line = `${new Date().toISOString()} ERROR ${e.message || e}\n`;
+  try { fs.appendFileSync("digest.log", line); } catch {}
   process.exit(1);
 });
