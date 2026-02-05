@@ -38,6 +38,16 @@ module.exports = {
       env: {
         NODE_ENV: "production"
       }
+    },
+    {
+      name: "auto-update",
+      script: "scripts/auto_update.sh",
+      time: true,
+      autorestart: false,
+      cron_restart: "0 3 * * *",
+      env: {
+        NODE_ENV: "production"
+      }
     }
   ]
 };
