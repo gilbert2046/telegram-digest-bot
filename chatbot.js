@@ -4,7 +4,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI, { toFile } from "openai";
 import path from "path";
 import { execSync } from "child_process";
+import dotenv from "dotenv";
 
+dotenv.config();
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
   polling: {
@@ -88,45 +90,17 @@ function loadPersona() {
     : "你是一个有帮助的 AI 助手。";
 }
 
-bot.on("message", async (msg) => {
-const text = (msg.text || "").trim();
+bot.on("text", async (msg) => {
   const chatId = msg.chat.id;
+  const text = (msg.text || "").trim();
 
-  if (!text) return;
+  // ⛔️ 所有 /命令都交给 bot.onText 处理
   if (text.startsWith("/")) return;
 
+
+  if (!text) return;
+
   // 📷 用户发来图片：下载到本地，等待后续 \edit 指令
-  if (msg.photo && msg.photo.length > 0) {
-    const largest = msg.photo[msg.photo.length - 1];
-    const fileId = largest.file_id;
-
-    try {
-      const fileUrl = await bot.getFileLink(fileId);
-      const res = await fetch(fileUrl);
-      const arrayBuffer = await res.arrayBuffer();
-
-      const dir = path.join(process.cwd(), "tmp");
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-
-      const filePath = path.join(dir, `tg_${chatId}_${Date.now()}.jpg`);
-      fs.writeFileSync(filePath, Buffer.from(arrayBuffer));
-
-      lastPhotoByChat.set(chatId, { filePath, ts: Date.now() });
-
-      // 如果图片 caption 里就带了 \edit，则直接走编辑
-      const cap = (msg.caption || "").trim();
-      if (cap.startsWith("\\edit ")) {
-        msg.text = cap; // 让下面统一走编辑逻辑
-      } else {
-        await bot.sendMessage(chatId, "收到图片啦 ✅ 现在发：\\edit 你的修改要求（例如：\\edit 改成赛博朋克海报风格）");
-        return;
-      }
-    } catch (e) {
-      console.error("Download photo error:", e);
-      await bot.sendMessage(chatId, "⚠️ 图片下载失败（可能是网络问题），再发一次试试。");
-      return;
-    }
-  }
   // 🎨 图片编辑：\edit 你的要求（先发图，再发 \edit）
   const incomingText = (msg.text || "").trim();
   if (incomingText.startsWith("\\edit ")) {
@@ -278,5 +252,6 @@ if (text.startsWith("/img ")) {
     await bot.sendMessage(chatId, "⚠️ 出错了");
   }
 });
+
 // test
 // auto-update check Wed Feb  4 23:54:36 CET 2026
