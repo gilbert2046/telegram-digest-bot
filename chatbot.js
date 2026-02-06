@@ -172,6 +172,63 @@ bot.onText(/\/update status|\/update log/, async (msg) => {
   await bot.sendMessage(chatId, `🧾 Update log (last 30 lines):\n${tail}`);
 });
 
+bot.onText(/\/setenv (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const chatKey = String(chatId);
+  if (!ADMIN_CHAT_IDS.includes(chatKey)) {
+    await bot.sendMessage(chatId, "⛔️ You are not authorized to set env.");
+    return;
+  }
+
+  const input = (match?.[1] || "").trim();
+  const parts = input.split(" ");
+  const key = parts.shift();
+  const value = parts.join(" ").trim();
+
+  const allowed = new Set([
+    "NODE_BIN",
+    "IMG_PROVIDER",
+    "TAVILY_API_KEY",
+    "ALPHAVANTAGE_API_KEY",
+    "GEMINI_API_KEY"
+  ]);
+
+  if (!key || !value || !allowed.has(key)) {
+    await bot.sendMessage(
+      chatId,
+      "用法：/setenv KEY VALUE\n允许 KEY: NODE_BIN, IMG_PROVIDER, TAVILY_API_KEY, ALPHAVANTAGE_API_KEY, GEMINI_API_KEY"
+    );
+    return;
+  }
+
+  if (value.includes("\n")) {
+    await bot.sendMessage(chatId, "⚠️ value 不能包含换行。");
+    return;
+  }
+
+  try {
+    const envPath = ".env";
+    let lines = [];
+    if (fs.existsSync(envPath)) {
+      lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
+    }
+    let found = false;
+    const newLines = lines.map((line) => {
+      if (line.startsWith(`${key}=`)) {
+        found = true;
+        return `${key}=${value}`;
+      }
+      return line;
+    });
+    if (!found) newLines.push(`${key}=${value}`);
+    fs.writeFileSync(envPath, newLines.join("\n"));
+
+    await bot.sendMessage(chatId, `✅ 已设置 ${key}。请执行 /update 让配置生效。`);
+  } catch (e) {
+    await bot.sendMessage(chatId, `⚠️ 设置失败：${e.message || e}`);
+  }
+});
+
 bot.onText(/\/ip/, async (msg) => {
   const chatId = msg.chat.id;
   const chatKey = String(chatId);
