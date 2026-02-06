@@ -884,10 +884,12 @@ bot.onText(/\/digest_daily/, async (msg) => {
   const chatId = msg.chat.id;
   await bot.sendMessage(chatId, "📰 Running daily digest...");
   try {
-    execSync("node scripts/digest_daily.js", { stdio: "ignore" });
+    const cmd = `"${process.execPath}" scripts/digest_daily.js`;
+    execSync(cmd, { stdio: "ignore", env: { ...process.env } });
     await bot.sendMessage(chatId, "✅ Daily digest sent.");
   } catch (e) {
-    await bot.sendMessage(chatId, `⚠️ Daily digest failed: ${e.message || e}`);
+    const detail = e?.stderr?.toString?.().slice(-400) || e?.message || e;
+    await bot.sendMessage(chatId, `⚠️ Daily digest failed: ${detail}`);
   }
 });
 
@@ -895,10 +897,12 @@ bot.onText(/\/digest_ai/, async (msg) => {
   const chatId = msg.chat.id;
   await bot.sendMessage(chatId, "💹 Running AI/finance digest...");
   try {
-    execSync("node scripts/digest_ai_finance.js", { stdio: "ignore" });
+    const cmd = `"${process.execPath}" scripts/digest_ai_finance.js`;
+    execSync(cmd, { stdio: "ignore", env: { ...process.env } });
     await bot.sendMessage(chatId, "✅ AI/finance digest sent.");
   } catch (e) {
-    await bot.sendMessage(chatId, `⚠️ AI/finance digest failed: ${e.message || e}`);
+    const detail = e?.stderr?.toString?.().slice(-400) || e?.message || e;
+    await bot.sendMessage(chatId, `⚠️ AI/finance digest failed: ${detail}`);
   }
 });
 
@@ -906,10 +910,12 @@ bot.onText(/\/paris_events/, async (msg) => {
   const chatId = msg.chat.id;
   await bot.sendMessage(chatId, "🥖 Running Paris events digest...");
   try {
-    execSync("node scripts/digest_paris_events.js", { stdio: "ignore" });
+    const cmd = `"${process.execPath}" scripts/digest_paris_events.js`;
+    execSync(cmd, { stdio: "ignore", env: { ...process.env } });
     await bot.sendMessage(chatId, "✅ Paris events sent.");
   } catch (e) {
-    await bot.sendMessage(chatId, `⚠️ Paris events failed: ${e.message || e}`);
+    const detail = e?.stderr?.toString?.().slice(-400) || e?.message || e;
+    await bot.sendMessage(chatId, `⚠️ Paris events failed: ${detail}`);
   }
 });
 
