@@ -406,30 +406,47 @@ async function summarizeUrl(url, chatId) {
 
 function formatHelp() {
   return [
-    "🧭 Commands:",
-    "/help - show this help",
-    "/status - server status",
-    "/search <query> - web search (Tavily)",
-    "/news - latest AI/tech news list",
-    "/digest - summarized digest from RSS",
-    "/summary <url> - summarize a webpage",
-    "/browse <url> - same as /summary",
-    "/translate <text> - translate (auto detect)",
-    "/write <instruction> - writing helper",
-    "/todo add <item> | /todo list | /todo done <n> | /todo clear",
-    "/time <city> - local time for a city",
-    "/weather <city> - current weather",
-    "/img <prompt> - generate image (default provider)",
-    "/img openai: <prompt> - force OpenAI",
-    "/img gemini: <prompt> - force Gemini",
-    "/edit <prompt> - edit last image (send image first)",
-    "/persona <text> - set persona",
-    "/remember <text> - add long-term memory",
-    "/forget - clear memory",
-    "/mem - list memories",
-    "/mem add <text> - add memory",
-    "/mem del <n> - delete memory",
-    "/mem clear - clear memories"
+    "🧭 **Command Menu** (tap or copy):",
+    "",
+    "🖼️ **Images**",
+    "• `/img <prompt>`",
+    "• `/img openai: <prompt>`",
+    "• `/img gemini: <prompt>`",
+    "• `/edit <prompt>` (send image first)",
+    "",
+    "📰 **News & Digests**",
+    "• `/digest_daily` (full daily)",
+    "• `/digest_ai` (AI + finance)",
+    "• `/paris_events` (Paris events)",
+    "• `/news` (list)",
+    "• `/digest` (summary)",
+    "",
+    "🔎 **Search & Browse**",
+    "• `/search <query>`",
+    "• `/summary <url>`",
+    "• `/browse <url>`",
+    "",
+    "🧠 **Chat & Memory**",
+    "• `/mem` | `/mem add <text>`",
+    "• `/mem del <n>` | `/mem clear`",
+    "• `/forget` (clear all memory)",
+    "• `/persona <text>`",
+    "",
+    "✍️ **Writing & Translation**",
+    "• `/write <instruction>`",
+    "• `/translate <text>`",
+    "",
+    "⏰ **Utilities**",
+    "• `/time <city>`",
+    "• `/weather <city>`",
+    "",
+    "🛠️ **Ops**",
+    "• `/status`",
+    "• `/update`",
+    "• `/update status` | `/update log`",
+    "• `/ip`",
+    "",
+    "Tip: set `IMG_PROVIDER=ask` to choose model each time."
   ].join("\n");
 }
 
@@ -860,6 +877,39 @@ bot.onText(/\/search (.+)/, async (msg, match) => {
     await bot.sendMessage(chatId, `${answer}🔎 Results:\n${results || "No results."}`);
   } catch (e) {
     await bot.sendMessage(chatId, `⚠️ 搜索失败：${e.message || e}`);
+  }
+});
+
+bot.onText(/\/digest_daily/, async (msg) => {
+  const chatId = msg.chat.id;
+  await bot.sendMessage(chatId, "📰 Running daily digest...");
+  try {
+    execSync("node scripts/digest_daily.js", { stdio: "ignore" });
+    await bot.sendMessage(chatId, "✅ Daily digest sent.");
+  } catch (e) {
+    await bot.sendMessage(chatId, `⚠️ Daily digest failed: ${e.message || e}`);
+  }
+});
+
+bot.onText(/\/digest_ai/, async (msg) => {
+  const chatId = msg.chat.id;
+  await bot.sendMessage(chatId, "💹 Running AI/finance digest...");
+  try {
+    execSync("node scripts/digest_ai_finance.js", { stdio: "ignore" });
+    await bot.sendMessage(chatId, "✅ AI/finance digest sent.");
+  } catch (e) {
+    await bot.sendMessage(chatId, `⚠️ AI/finance digest failed: ${e.message || e}`);
+  }
+});
+
+bot.onText(/\/paris_events/, async (msg) => {
+  const chatId = msg.chat.id;
+  await bot.sendMessage(chatId, "🥖 Running Paris events digest...");
+  try {
+    execSync("node scripts/digest_paris_events.js", { stdio: "ignore" });
+    await bot.sendMessage(chatId, "✅ Paris events sent.");
+  } catch (e) {
+    await bot.sendMessage(chatId, `⚠️ Paris events failed: ${e.message || e}`);
   }
 });
 
