@@ -172,6 +172,30 @@ bot.onText(/\/update status|\/update log/, async (msg) => {
   await bot.sendMessage(chatId, `🧾 Update log (last 30 lines):\n${tail}`);
 });
 
+bot.onText(/\/ip/, async (msg) => {
+  const chatId = msg.chat.id;
+  const chatKey = String(chatId);
+  if (!ADMIN_CHAT_IDS.includes(chatKey)) {
+    await bot.sendMessage(chatId, "⛔️ You are not authorized to view IP.");
+    return;
+  }
+  try {
+    const host = execSync("scutil --get LocalHostName", { encoding: "utf8" }).trim();
+    let en0 = "";
+    let en1 = "";
+    try { en0 = execSync("ipconfig getifaddr en0", { encoding: "utf8" }).trim(); } catch {}
+    try { en1 = execSync("ipconfig getifaddr en1", { encoding: "utf8" }).trim(); } catch {}
+    const text = [
+      `Host: ${host || "unknown"}`,
+      `en0: ${en0 || "(none)"}`,
+      `en1: ${en1 || "(none)"}`
+    ].join("\n");
+    await bot.sendMessage(chatId, text);
+  } catch (e) {
+    await bot.sendMessage(chatId, `⚠️ IP lookup failed: ${e.message || e}`);
+  }
+});
+
 bot.on("polling_error", (error) => {
   const msg = String(error?.message || error);
   if (msg.includes("ENOTFOUND") || msg.includes("EAI_AGAIN")) {
