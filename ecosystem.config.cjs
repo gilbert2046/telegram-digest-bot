@@ -10,18 +10,18 @@ module.exports = {
       }
     },
     {
-      name: "daily-digest-10",
-      script: "runDigest.js",
+      name: "digest-daily-11",
+      script: "scripts/digest_daily.js",
       time: true,
       autorestart: false,
-      cron_restart: "0 10 * * *",
+      cron_restart: "0 11 * * *",
       env: {
         NODE_ENV: "production"
       }
     },
     {
-      name: "daily-digest-14",
-      script: "runDigest.js",
+      name: "digest-ai-14",
+      script: "scripts/digest_ai_finance.js",
       time: true,
       autorestart: false,
       cron_restart: "0 14 * * *",
@@ -30,8 +30,8 @@ module.exports = {
       }
     },
     {
-      name: "daily-digest-19",
-      script: "runDigest.js",
+      name: "digest-paris-19",
+      script: "scripts/digest_paris_events.js",
       time: true,
       autorestart: false,
       cron_restart: "0 19 * * *",
