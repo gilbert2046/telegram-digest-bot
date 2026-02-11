@@ -941,7 +941,8 @@ bot.onText(/\/digest_daily/, async (msg) => {
   const chatId = msg.chat.id;
   await bot.sendMessage(chatId, "📰 Running daily digest...");
   try {
-    const cmd = `"${process.execPath}" scripts/digest_daily.js`;
+    const nodeBin = process.env.NODE_BIN || process.execPath;
+    const cmd = `"${nodeBin}" scripts/digest_daily.js`;
     execSync(cmd, { stdio: "ignore", env: { ...process.env } });
     await bot.sendMessage(chatId, "✅ Daily digest sent.");
   } catch (e) {
@@ -954,7 +955,8 @@ bot.onText(/\/digest_ai/, async (msg) => {
   const chatId = msg.chat.id;
   await bot.sendMessage(chatId, "💹 Running AI/finance digest...");
   try {
-    const cmd = `"${process.execPath}" scripts/digest_ai_finance.js`;
+    const nodeBin = process.env.NODE_BIN || process.execPath;
+    const cmd = `"${nodeBin}" scripts/digest_ai_finance.js`;
     execSync(cmd, { stdio: "ignore", env: { ...process.env } });
     await bot.sendMessage(chatId, "✅ AI/finance digest sent.");
   } catch (e) {
@@ -967,7 +969,8 @@ bot.onText(/\/paris_events/, async (msg) => {
   const chatId = msg.chat.id;
   await bot.sendMessage(chatId, "🥖 Running Paris events digest...");
   try {
-    const cmd = `"${process.execPath}" scripts/digest_paris_events.js`;
+    const nodeBin = process.env.NODE_BIN || process.execPath;
+    const cmd = `"${nodeBin}" scripts/digest_paris_events.js`;
     execSync(cmd, { stdio: "ignore", env: { ...process.env } });
     await bot.sendMessage(chatId, "✅ Paris events sent.");
   } catch (e) {
