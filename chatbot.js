@@ -943,11 +943,13 @@ bot.onText(/\/digest_daily/, async (msg) => {
   try {
     const nodeBin = process.env.NODE_BIN || process.execPath;
     const cmd = `"${nodeBin}" scripts/digest_daily.js`;
-    execSync(cmd, { stdio: "ignore", env: { ...process.env } });
+    execSync(cmd, { stdio: "pipe", env: { ...process.env } });
     await bot.sendMessage(chatId, "✅ Daily digest sent.");
   } catch (e) {
-    const detail = e?.stderr?.toString?.().slice(-400) || e?.message || e;
-    await bot.sendMessage(chatId, `⚠️ Daily digest failed: ${detail}`);
+    const stdout = e?.stdout?.toString?.() || "";
+    const stderr = e?.stderr?.toString?.() || "";
+    const detail = (stderr || stdout || e?.message || String(e)).slice(-800);
+    await bot.sendMessage(chatId, `⚠️ Daily digest failed:\n${detail}`);
   }
 });
 
@@ -957,11 +959,13 @@ bot.onText(/\/digest_ai/, async (msg) => {
   try {
     const nodeBin = process.env.NODE_BIN || process.execPath;
     const cmd = `"${nodeBin}" scripts/digest_ai_finance.js`;
-    execSync(cmd, { stdio: "ignore", env: { ...process.env } });
+    execSync(cmd, { stdio: "pipe", env: { ...process.env } });
     await bot.sendMessage(chatId, "✅ AI/finance digest sent.");
   } catch (e) {
-    const detail = e?.stderr?.toString?.().slice(-400) || e?.message || e;
-    await bot.sendMessage(chatId, `⚠️ AI/finance digest failed: ${detail}`);
+    const stdout = e?.stdout?.toString?.() || "";
+    const stderr = e?.stderr?.toString?.() || "";
+    const detail = (stderr || stdout || e?.message || String(e)).slice(-800);
+    await bot.sendMessage(chatId, `⚠️ AI/finance digest failed:\n${detail}`);
   }
 });
 
@@ -971,11 +975,13 @@ bot.onText(/\/paris_events/, async (msg) => {
   try {
     const nodeBin = process.env.NODE_BIN || process.execPath;
     const cmd = `"${nodeBin}" scripts/digest_paris_events.js`;
-    execSync(cmd, { stdio: "ignore", env: { ...process.env } });
+    execSync(cmd, { stdio: "pipe", env: { ...process.env } });
     await bot.sendMessage(chatId, "✅ Paris events sent.");
   } catch (e) {
-    const detail = e?.stderr?.toString?.().slice(-400) || e?.message || e;
-    await bot.sendMessage(chatId, `⚠️ Paris events failed: ${detail}`);
+    const stdout = e?.stdout?.toString?.() || "";
+    const stderr = e?.stderr?.toString?.() || "";
+    const detail = (stderr || stdout || e?.message || String(e)).slice(-800);
+    await bot.sendMessage(chatId, `⚠️ Paris events failed:\n${detail}`);
   }
 });
 
